@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Configuration;
 using RestAPIBank.Models;
 using RestAPITesting.Models;
+using System.ComponentModel.DataAnnotations;
 using System.Data.SqlClient;
 
 namespace RestAPITesting.Controllers
@@ -50,6 +51,22 @@ namespace RestAPITesting.Controllers
             return response;
         }
 
+        public class depositeRequest
+        {
+            public string amountAdding { get; set; }
+            public string userCardNum { get; set; }
+        }
+
+        [HttpPost]
+        [Route("deposit")]
+        public userInfoResponse deposit([FromBody] depositeRequest request)
+        {
+            SqlConnection con = new SqlConnection(_configuration.GetConnectionString("CurrencyCon").ToString());
+            userInfoResponse response = new userInfoResponse();
+            Application apl = new Application();
+            response = apl.deposit(con, request.amountAdding, request.userCardNum);
+            return response;
+        }
 
 
 

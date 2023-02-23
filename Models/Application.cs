@@ -199,7 +199,7 @@ namespace RestAPITesting.Models
                     cmd.Parameters.AddWithValue("@Password", hashedPassword);
                     cmd.Parameters.AddWithValue("@FName", user.firstName);
                     cmd.Parameters.AddWithValue("@LName", user.lastName);
-                    cmd.Parameters.AddWithValue("@Dob", user.DOB);
+                    cmd.Parameters.AddWithValue("@Dob", user.DOB.ToShortDateString());
                     cmd.Parameters.AddWithValue("@Email", user.email);
                     cmd.Parameters.AddWithValue("@PhoneNumber", user.phoneNumber);
                     cmd.Parameters.AddWithValue("@occupation", user.occupation);
@@ -213,7 +213,11 @@ namespace RestAPITesting.Models
                     int newUserId = (int)cmd.ExecuteScalar();
                     //Randomlly get an account number for the new user
                     Random rand = new Random();
-                    long accountNumber = (long)(rand.NextDouble() * (9832789 - 3) + rand.NextDouble() * (89732 - 298)) * 100;
+                    //long accountNumber = (long)(rand.NextDouble() * (9832789 - 3) + rand.NextDouble() * (89732 - 298)) * 100;
+                    int digits = 10;
+                    long accountNumber = long.Parse(string.Join("", Enumerable.Range(1, digits - 1).Select(_ => rand.Next(10).ToString())) + rand.Next(1, 10).ToString());
+
+
                     string accountQuery = "Insert Into UserAccount values (@UserId, @CardNumber, 0.0)";
                     SqlCommand accountCmd = new SqlCommand(accountQuery, con);
                     accountCmd.Parameters.AddWithValue("@UserId", newUserId);
@@ -223,7 +227,7 @@ namespace RestAPITesting.Models
                     if (i > 0)
                     {
                         response.StatusCode = 200;
-                        response.StatusMessage = "New Customer Registed Successfully!";
+                        response.StatusMessage = "New Customer Registed Successfully, click ok go back to log in page!";
                     }
                     else
                     {
@@ -240,6 +244,7 @@ namespace RestAPITesting.Models
             return response;
         }
 
+        //Login method
         public userInfoResponse Login(SqlConnection con, string email, string pwd)
         {
             userInfoResponse response = new userInfoResponse();
@@ -313,6 +318,65 @@ namespace RestAPITesting.Models
 
             return response;
         }
+
+        public userInfoResponse deposit(SqlConnection con, string amount, string usercardnumber)
+        {
+            con.Open();
+            userInfoResponse userInfoResponse = new userInfoResponse();
+
+            string query = "UPDATE UserAccount SET Balance = Balance + @depositAmount WHERE CardNumber = @accountNumber";
+            SqlCommand cmd = new SqlCommand(query, con);
+            cmd.Parameters.AddWithValue("@depositAmount", amount);
+            cmd.Parameters.AddWithValue("@accountNumber", usercardnumber);
+            cmd.ExecuteNonQuery();
+
+            // Retrieve the new balance value from the database
+            query = "SELECT UserId, Balance FROM UserAccount WHERE CardNumber = @accountNumber";
+            cmd = new SqlCommand(query, con);
+            cmd.Parameters.AddWithValue("@accountNumber", usercardnumber);
+            SqlDataReader reader = cmd.ExecuteReader();
+            int loggedUserId = 0;
+            double newAmount = 0;
+            while (reader.Read())
+            {
+                loggedUserId = reader.GetInt32(0);
+                newAmount = reader.GetDouble(1);
+            }
+            reader.Close();
+           // amount = newAmount.ToString() + "$";
+
+            //Update deposit record into database
+            cmd = new SqlCommand("Insert into UserTransaction values (@userid, @cardNum, @type, @time, @amount)", con);
+            DateTime currentDateTime = DateTime.Now;
+            cmd.Parameters.AddWithValue("@userid", loggedUserId.ToString());
+            cmd.Parameters.AddWithValue("@cardNum", usercardnumber);
+            cmd.Parameters.AddWithValue("@type", "Deposit");
+            cmd.Parameters.AddWithValue("@time", currentDateTime);
+            cmd.Parameters.AddWithValue("@amount", amount);
+            int i = cmd.ExecuteNonQuery();
+            UserAccount acc = new UserAccount();
+            acc.userId = loggedUserId;
+            acc.Balance = newAmount;
+
+
+            if (i > 0)
+            {
+                userInfoResponse.accout = acc;
+                userInfoResponse.StatusCode = 200;
+                userInfoResponse.StatusMessage = "You have deposited " + amount  + " successfully!";
+            }
+            else
+            {
+                userInfoResponse.StatusCode = 100;
+                userInfoResponse.StatusMessage = "Deposited Failed!";
+
+            }
+            con.Close();
+            return userInfoResponse;
+           
+        }
+
+
 
     }
 }
