@@ -1,0 +1,57 @@
+﻿using Microsoft.AspNetCore.Http;
+using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Configuration;
+using RestAPIBank.Models;
+using RestAPITesting.Models;
+using System.Data.SqlClient;
+
+namespace RestAPITesting.Controllers
+{
+    [Route("api/[controller]")]
+    [ApiController]
+    public class UserInfoController : ControllerBase
+    {
+        private readonly IConfiguration _configuration;
+
+        public UserInfoController(IConfiguration configuration)
+        {
+            _configuration = configuration;
+        }
+
+
+
+
+        //Register new user
+        [HttpPost]
+        [Route("register")]
+        public userInfoResponse register(UserInfo newUser)
+        {
+            SqlConnection con = new SqlConnection(_configuration.GetConnectionString("CurrencyCon").ToString());
+            userInfoResponse response = new userInfoResponse();
+            Application apl = new Application();
+            response = apl.registerNewUser(con, newUser);
+            return response;
+        }
+
+        public class LoginRequest
+        {
+            public string email { get; set; }
+            public string password { get; set; }
+        }
+
+        [HttpPost]
+        [Route("login")]    
+        public userInfoResponse Login([FromBody] LoginRequest request)
+        {
+            SqlConnection con = new SqlConnection(_configuration.GetConnectionString("CurrencyCon").ToString());
+            userInfoResponse response = new userInfoResponse();
+            Application apl = new Application();
+            response = apl.Login(con, request.email, request.password);
+            return response;
+        }
+
+
+
+
+    }
+}

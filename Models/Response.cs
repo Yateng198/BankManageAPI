@@ -1,4 +1,5 @@
 ﻿using RestAPIBank.Models;
+using RestAPITesting.Models;
 
 namespace RestAPIBank.Models
 {
