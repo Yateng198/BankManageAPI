@@ -363,7 +363,7 @@ namespace RestAPITesting.Models
             {
                 userInfoResponse.accout = acc;
                 userInfoResponse.StatusCode = 200;
-                userInfoResponse.StatusMessage = "You have deposited " + amount  + " successfully!";
+                userInfoResponse.StatusMessage = "You have deposited " + amount  + "$ successfully!";
             }
             else
             {
@@ -374,6 +374,62 @@ namespace RestAPITesting.Models
             con.Close();
             return userInfoResponse;
            
+        }
+
+        public userInfoResponse withdrawal(SqlConnection con, string amount, string usercardnumber)
+        {
+            con.Open();
+            userInfoResponse userInfoResponse = new userInfoResponse();
+
+            string query = "UPDATE UserAccount SET Balance = Balance - @windrawalAmount WHERE CardNumber = @accountNumber";
+            SqlCommand cmd = new SqlCommand(query, con);
+            cmd.Parameters.AddWithValue("@windrawalAmount", amount);
+            cmd.Parameters.AddWithValue("@accountNumber", usercardnumber);
+            cmd.ExecuteNonQuery();
+
+            // Retrieve the new balance value from the database
+            query = "SELECT UserId, Balance FROM UserAccount WHERE CardNumber = @accountNumber";
+            cmd = new SqlCommand(query, con);
+            cmd.Parameters.AddWithValue("@accountNumber", usercardnumber);
+            SqlDataReader reader = cmd.ExecuteReader();
+            int loggedUserId = 0;
+            double newAmount = 0;
+            while (reader.Read())
+            {
+                loggedUserId = reader.GetInt32(0);
+                newAmount = reader.GetDouble(1);
+            }
+            reader.Close();
+
+            //Update deposit record into database
+            cmd = new SqlCommand("Insert into UserTransaction values (@userid, @cardNum, @type, @time, @amount)", con);
+            DateTime currentDateTime = DateTime.Now;
+            cmd.Parameters.AddWithValue("@userid", loggedUserId.ToString());
+            cmd.Parameters.AddWithValue("@cardNum", usercardnumber);
+            cmd.Parameters.AddWithValue("@type", "Withdrawal");
+            cmd.Parameters.AddWithValue("@time", currentDateTime);
+            cmd.Parameters.AddWithValue("@amount", amount);
+            int i = cmd.ExecuteNonQuery();
+            UserAccount acc = new UserAccount();
+            acc.userId = loggedUserId;
+            acc.Balance = newAmount;
+
+
+            if (i > 0)
+            {
+                userInfoResponse.accout = acc;
+                userInfoResponse.StatusCode = 200;
+                userInfoResponse.StatusMessage = "You have withdrawn " + amount + "$ successfully!";
+            }
+            else
+            {
+                userInfoResponse.StatusCode = 100;
+                userInfoResponse.StatusMessage = "Deposited Failed!";
+
+            }
+            con.Close();
+            return userInfoResponse;
+
         }
 
 

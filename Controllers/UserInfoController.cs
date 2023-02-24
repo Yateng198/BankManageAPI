@@ -68,6 +68,17 @@ namespace RestAPITesting.Controllers
             return response;
         }
 
+        [HttpPost]
+        [Route("withdraw")]
+        public userInfoResponse withdraw([FromBody] depositeRequest request)
+        {
+            SqlConnection con = new SqlConnection(_configuration.GetConnectionString("CurrencyCon").ToString());
+            userInfoResponse response = new userInfoResponse();
+            Application apl = new Application();
+            response = apl.withdrawal(con, request.amountAdding, request.userCardNum);
+            return response;
+        }
+
 
 
     }
