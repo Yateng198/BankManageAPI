@@ -52,6 +52,9 @@ namespace RestAPITesting.Controllers
             return response;
         }
 
+
+       
+
         [HttpPut]
         [Route("UpdateCurrency")]
         public Response UpdateCurrency(Currency currency)
@@ -74,5 +77,6 @@ namespace RestAPITesting.Controllers
             response = apl.DeleteCurrency(con, Date);
             return response;
         }
+        
     }
 }
