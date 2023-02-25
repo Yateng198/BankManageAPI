@@ -20,8 +20,6 @@ namespace RestAPITesting.Controllers
         }
 
 
-
-
         //Register new user
         [HttpPost]
         [Route("register")]
@@ -39,7 +37,7 @@ namespace RestAPITesting.Controllers
             public string email { get; set; }
             public string password { get; set; }
         }
-
+        //User Log in
         [HttpPost]
         [Route("login")]    
         public userInfoResponse Login([FromBody] LoginRequest request)
@@ -56,7 +54,7 @@ namespace RestAPITesting.Controllers
             public string amountAdding { get; set; }
             public string userCardNum { get; set; }
         }
-
+        //User deposit
         [HttpPost]
         [Route("deposit")]
         public userInfoResponse deposit([FromBody] depositeRequest request)
@@ -67,7 +65,7 @@ namespace RestAPITesting.Controllers
             response = apl.deposit(con, request.amountAdding, request.userCardNum);
             return response;
         }
-
+        //User withdrawal
         [HttpPost]
         [Route("withdraw")]
         public userInfoResponse withdraw([FromBody] depositeRequest request)
@@ -78,8 +76,5 @@ namespace RestAPITesting.Controllers
             response = apl.withdrawal(con, request.amountAdding, request.userCardNum);
             return response;
         }
-
-
-
     }
 }
