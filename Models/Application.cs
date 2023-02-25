@@ -343,7 +343,7 @@ namespace RestAPITesting.Models
                 newAmount = reader.GetDouble(1);
             }
             reader.Close();
-           // amount = newAmount.ToString() + "$";
+            // amount = newAmount.ToString() + "$";
 
             //Update deposit record into database
             cmd = new SqlCommand("Insert into UserTransaction values (@userid, @cardNum, @type, @time, @amount)", con);
@@ -363,7 +363,7 @@ namespace RestAPITesting.Models
             {
                 userInfoResponse.accout = acc;
                 userInfoResponse.StatusCode = 200;
-                userInfoResponse.StatusMessage = "You have deposited " + amount  + "$ successfully!";
+                userInfoResponse.StatusMessage = "You have deposited " + amount + "$ successfully!";
             }
             else
             {
@@ -373,7 +373,7 @@ namespace RestAPITesting.Models
             }
             con.Close();
             return userInfoResponse;
-           
+
         }
 
         public userInfoResponse withdrawal(SqlConnection con, string amount, string usercardnumber)
@@ -430,6 +430,269 @@ namespace RestAPITesting.Models
             con.Close();
             return userInfoResponse;
 
+        }
+
+        public userInfoResponse transferByEmail(SqlConnection con, string amount, string email)
+        {
+            con.Open();
+            userInfoResponse response = new userInfoResponse();
+            SqlCommand cmd = new SqlCommand("select count(1) from UserInfo where Email = @email COLLATE SQL_Latin1_General_CP1_CS_AS", con);
+            cmd.CommandType = System.Data.CommandType.Text;
+            cmd.Parameters.AddWithValue("@email", email);
+            int count = Convert.ToInt32(cmd.ExecuteScalar());
+            if (count == 1)
+            {
+                //Add check if sender and receiver is the same account
+                cmd = new SqlCommand("select UserId, F_Name, L_Name from UserInfo where Email = @email COLLATE SQL_Latin1_General_CP1_CS_AS", con);
+
+                cmd.Parameters.AddWithValue("@email", email);
+                SqlDataReader reader = cmd.ExecuteReader();
+                int userId = 0;
+                string firstName = "";
+                string lastName = "";
+                while (reader.Read())
+                {
+                    userId = reader.GetInt32(0);
+                    firstName = reader.GetString(1);
+                    lastName = reader.GetString(2);
+                }
+                reader.Close();
+                UserInfo user = new UserInfo();
+                user.userId = userId;
+                user.firstName = firstName;
+                user.lastName = lastName;
+                response.user = user;
+                response.StatusCode = 200;
+                response.StatusMessage = "You are Making a Tranfer of Amount: " + amount + "$\r\n" + "To: " + firstName + " " + lastName +
+                               "\r\nConfirm or Cancel?";
+                con.Close();
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No user found! Check the email entered and try again please";
+                con.Close();
+                return response;
+            }
+            con.Close();
+            return response;
+        }
+
+        //Transfer by user account number
+        public userInfoResponse transferByCardNumber(SqlConnection con, string amount, string cardNumber)
+        {
+            con.Open();
+            userInfoResponse response = new userInfoResponse();
+            //Check if there is any user corresponding this card number
+            SqlCommand cmd = new SqlCommand("select UserId from UserAccount where CardNumber = @cardnumber", con);
+            cmd.Parameters.AddWithValue("@cardnumber", cardNumber);
+            var checkID = cmd.ExecuteScalar();
+            if (checkID != null)
+            {
+                //Add check if sender and receiver is the same account
+                try
+                {
+                    int userId = (int)cmd.ExecuteScalar();
+                    string firstName = "";
+                    string lastName = "";
+                    if (userId != 0)
+                    {
+                        //Take out the user first name and last name for confirmation button click
+                        cmd = new SqlCommand("select F_Name, L_Name from UserInfo where UserId = @userid", con);
+                        cmd.Parameters.AddWithValue("@userid", userId);
+                        SqlDataReader reader = cmd.ExecuteReader();
+                        while (reader.Read())
+                        {
+                            firstName = reader.GetString(0);
+                            lastName = reader.GetString(1);
+                        }
+                        reader.Close();
+                        UserInfo user = new UserInfo();
+                        user.userId = userId;
+                        user.firstName = firstName;
+                        user.lastName = lastName;
+                        response.user = user;
+                        response.StatusCode = 200;
+                        response.StatusMessage = "You are Making a Tranfer of Amount: " + amount + "\r\n" + "To: " + firstName + " " + lastName +
+                                       "\r\nConfirm or Cancel?";
+                        con.Close();
+                    }
+                    else
+                    {
+                        response.StatusCode = 100;
+                        response.StatusMessage = "No Account found! Check the Account Nuber entered and try again please";
+                        con.Close();
+                        return response;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    response.StatusCode = 100;
+                    response.StatusMessage = "Please enter a valide Account Number and try again!";
+                    con.Close();
+                    return response;
+                }
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Account found! Check the Account Nuber entered and try again please!";
+                con.Close();
+                return response;
+            }
+            con.Close();
+            return response;
+        }
+        //Confirm Button Click method
+        public userInfoResponse confirmButton(SqlConnection con, string senderCurrentBalance, string recipientUserId, string amountTrans, string senderEmail)
+        {
+            con.Open();
+            userInfoResponse response = new userInfoResponse();
+            //update receivers balance to database
+            SqlCommand cmd = new SqlCommand("Select Balance from UserAccount where UserId = @ID", con);
+            cmd.Parameters.AddWithValue("@ID", recipientUserId);
+            double receiverCurrentBalance = (double)cmd.ExecuteScalar() + double.Parse(amountTrans);
+            con.Close();
+            con.Open();
+            cmd = new SqlCommand("UPDATE UserAccount SET Balance = @balance WHERE UserId = @ID", con);
+            cmd.Parameters.AddWithValue("@balance", receiverCurrentBalance);
+            cmd.Parameters.AddWithValue("@ID", recipientUserId);
+            cmd.ExecuteNonQueryAsync();
+            con.Close();
+            con.Open();
+
+            //update senders balance to database
+            cmd = new SqlCommand("Select UserId from UserInfo where Email = @email COLLATE SQL_Latin1_General_CP1_CS_AS", con);
+            cmd.Parameters.AddWithValue("@email", senderEmail);
+            int senderUserId = (int)cmd.ExecuteScalar();
+            double senderNewAmount = double.Parse(senderCurrentBalance) - double.Parse(amountTrans);
+            con.Close();
+            con.Open();
+            cmd = new SqlCommand("UPDATE UserAccount SET Balance = @newBalance WHERE UserId = @ID", con);
+            cmd.Parameters.AddWithValue("@newBalance", senderNewAmount);
+            cmd.Parameters.AddWithValue("@ID", senderUserId);
+            cmd.ExecuteNonQueryAsync();
+            con.Close();
+            con.Open();
+
+            //save this transaction into dataase, for both sneder and receiver
+
+            //Get sender's card number
+            cmd = new SqlCommand("select CardNumber from UserAccount where UserId IN (@senderId, @receiverId)", con);
+            cmd.Parameters.AddWithValue("@senderId", senderUserId);
+            cmd.Parameters.AddWithValue("@receiverId", recipientUserId);
+            SqlDataReader reader = cmd.ExecuteReader();
+            long senderCardNumber = 0;
+            long receiverCardNumber = 0;
+            while (reader.Read())
+            {
+                string cardNumber = reader.GetValue(0).ToString();
+                if (senderCardNumber == 0)
+                {
+                    senderCardNumber = long.Parse(cardNumber);
+                }
+                else
+                {
+                    receiverCardNumber = long.Parse(cardNumber);
+                }
+
+            }
+            reader.Close();
+            con.Close();
+            con.Open();
+            cmd = new SqlCommand("select F_Name, L_Name, Date_Of_Birth, Mobile, Address_Country from UserInfo where UserId = @id ", con);
+            cmd.Parameters.AddWithValue("@id", senderUserId);
+            reader = cmd.ExecuteReader();
+
+            //reader.GetDateTime(2).ToString("yyyy-MM-dd");
+            UserInfo senderUserInfo = new UserInfo();
+            senderUserInfo.firstName = string.Empty;
+            while (reader.Read())
+            {
+                senderUserInfo.firstName = reader.GetString(0);
+                senderUserInfo.lastName = reader.GetString(1);
+                senderUserInfo.DOB = reader.GetDateTime(2);
+                senderUserInfo.phoneNumber = reader.GetString(3);
+                senderUserInfo.addressCountry = reader.GetString(4);
+            }
+            reader.Close();
+            con.Close();
+            con.Open();
+            //Insert record into sender database
+            cmd = new SqlCommand("insert into UserTransaction values (@userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
+            cmd.Parameters.AddWithValue("@userid", senderUserId);
+            cmd.Parameters.AddWithValue("@CardNumber", senderCardNumber);
+            cmd.Parameters.AddWithValue("@TransactionType", "Transfer OUT");
+            DateTime currrentDateTime = DateTime.Now;
+            cmd.Parameters.AddWithValue("@TransactionTime", currrentDateTime);
+            cmd.Parameters.AddWithValue("@TransactionAmount", amountTrans);
+            cmd.ExecuteNonQueryAsync();
+            con.Close();
+            con.Open();
+
+            //Insert record into receiver database
+            cmd = new SqlCommand("insert into UserTransaction values (@userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
+            cmd.Parameters.AddWithValue("@userid", recipientUserId);
+            cmd.Parameters.AddWithValue("@CardNumber", receiverCardNumber);
+            cmd.Parameters.AddWithValue("@TransactionType", "Transfer IN");
+            cmd.Parameters.AddWithValue("@TransactionTime", currrentDateTime);
+            cmd.Parameters.AddWithValue("@TransactionAmount", amountTrans);
+            cmd.ExecuteNonQueryAsync();
+
+            UserAccount senderUserAccount = new UserAccount();
+            senderUserAccount.Balance = senderNewAmount;
+            senderUserAccount.CardNumber = senderCardNumber;
+
+            response.StatusCode = 200;
+            response.StatusMessage = "Successed!";
+            response.user = senderUserInfo;
+            response.accout = senderUserAccount;
+            con.Close();
+            return response;
+        }
+
+        public userInfoResponse cacelButton(SqlConnection con, string email)
+        {
+            con.Open();
+            userInfoResponse response = new userInfoResponse();
+            //Retrieve original user information for back to myAccount window
+            SqlCommand cmd = new SqlCommand("select F_Name, L_Name, Date_Of_Birth, Mobile, Address_Country, UserId from UserInfo where Email = @email COLLATE SQL_Latin1_General_CP1_CS_AS ", con);
+            cmd.Parameters.AddWithValue("@email", email);
+            SqlDataReader reader = cmd.ExecuteReader();
+            UserInfo user = new UserInfo();
+            while (reader.Read())
+            {
+                user.firstName = reader.GetString(0);
+                user.lastName = reader.GetString(1);
+                user.DOB = reader.GetDateTime(2);
+                user.phoneNumber = reader.GetString(3);
+                user.addressCountry = reader.GetString(4);
+                //ID will use in next query to retrieve account information
+                user.userId = reader.GetInt32(5);
+            }
+            reader.Close();
+            con.Close();
+            con.Open();
+            //Retrieve updated user account information for myAccount window
+            cmd = new SqlCommand("select CardNumber, Balance from UserAccount where UserId = @id", con);
+            cmd.Parameters.AddWithValue("@id", user.userId.ToString());
+            reader = cmd.ExecuteReader();
+            UserAccount account = new UserAccount();
+            while (reader.Read())
+            {
+                account.CardNumber = reader.GetInt64(0);
+                account.Balance = reader.GetDouble(1);
+
+            }
+            reader.Close();
+            
+            con.Close();
+
+            response.StatusMessage = string.Empty;
+            response.StatusCode = 200;
+            response.user = user;
+            response.accout = account;
+            return response;
         }
 
 
