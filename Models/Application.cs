@@ -578,33 +578,36 @@ namespace RestAPITesting.Models
             //save this transaction into dataase, for both sneder and receiver
 
             //Get sender's card number
-            cmd = new SqlCommand("select CardNumber from UserAccount where UserId IN (@senderId, @receiverId)", con);
+            cmd = new SqlCommand("select CardNumber from UserAccount where UserId = @senderId", con);
             cmd.Parameters.AddWithValue("@senderId", senderUserId);
-            cmd.Parameters.AddWithValue("@receiverId", recipientUserId);
             SqlDataReader reader = cmd.ExecuteReader();
             long senderCardNumber = 0;
+            //long receiverCardNumber = 0;
+            while (reader.Read())
+            {
+                senderCardNumber = long.Parse(reader.GetValue(0).ToString());
+            }
+            reader.Close();
+            con.Close();
+            //Get receipient card number
+            con.Open();
+            cmd = new SqlCommand("select CardNumber from UserAccount where UserId = @receiverId", con);
+            //cmd.Parameters.AddWithValue("@senderId", senderUserId);
+            cmd.Parameters.AddWithValue("@receiverId", recipientUserId);
+            reader = cmd.ExecuteReader();
+           // long senderCardNumber = 0;
             long receiverCardNumber = 0;
             while (reader.Read())
             {
-                string cardNumber = reader.GetValue(0).ToString();
-                if (senderCardNumber == 0)
-                {
-                    senderCardNumber = long.Parse(cardNumber);
-                }
-                else
-                {
-                    receiverCardNumber = long.Parse(cardNumber);
-                }
-
+                receiverCardNumber = long.Parse(reader.GetValue(0).ToString());
             }
             reader.Close();
             con.Close();
             con.Open();
+            //Retrieve sender personal information
             cmd = new SqlCommand("select F_Name, L_Name, Date_Of_Birth, Mobile, Address_Country from UserInfo where UserId = @id ", con);
             cmd.Parameters.AddWithValue("@id", senderUserId);
             reader = cmd.ExecuteReader();
-
-            //reader.GetDateTime(2).ToString("yyyy-MM-dd");
             UserInfo senderUserInfo = new UserInfo();
             senderUserInfo.firstName = string.Empty;
             while (reader.Read())
@@ -643,6 +646,7 @@ namespace RestAPITesting.Models
             senderUserAccount.Balance = senderNewAmount;
             senderUserAccount.CardNumber = senderCardNumber;
 
+            //Setup response object
             response.StatusCode = 200;
             response.StatusMessage = "Successed!";
             response.user = senderUserInfo;
@@ -685,7 +689,7 @@ namespace RestAPITesting.Models
 
             }
             reader.Close();
-            
+
             con.Close();
 
             response.StatusMessage = string.Empty;
