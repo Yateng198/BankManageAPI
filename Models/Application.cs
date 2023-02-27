@@ -227,12 +227,12 @@ namespace RestAPITesting.Models
                     if (i > 0)
                     {
                         response.StatusCode = 200;
-                        response.StatusMessage = "New Customer Registed Successfully, click ok go back to log in page!";
+                        response.StatusMessage = "New Customer Registered Successfully, click ok and go back to log in page!";
                     }
                     else
                     {
                         response.StatusCode = 100;
-                        response.StatusMessage = "New Customer Register Faild, Check your information and try again please!";
+                        response.StatusMessage = "New Customer Registration Failed, Check your information and try again please!";
                     }
                 }
                 else
@@ -408,7 +408,7 @@ namespace RestAPITesting.Models
             cmd.Parameters.AddWithValue("@cardNum", usercardnumber);
             cmd.Parameters.AddWithValue("@type", "Withdrawal");
             cmd.Parameters.AddWithValue("@time", currentDateTime);
-            cmd.Parameters.AddWithValue("@amount", amount);
+            cmd.Parameters.AddWithValue("@amount", (0-double.Parse(amount)).ToString());
             int i = cmd.ExecuteNonQuery();
             UserAccount acc = new UserAccount();
             acc.userId = loggedUserId;
@@ -424,7 +424,7 @@ namespace RestAPITesting.Models
             else
             {
                 userInfoResponse.StatusCode = 100;
-                userInfoResponse.StatusMessage = "Deposited Failed!";
+                userInfoResponse.StatusMessage = "Withdrawn Failed!";
 
             }
             con.Close();
@@ -578,33 +578,36 @@ namespace RestAPITesting.Models
             //save this transaction into dataase, for both sneder and receiver
 
             //Get sender's card number
-            cmd = new SqlCommand("select CardNumber from UserAccount where UserId IN (@senderId, @receiverId)", con);
+            cmd = new SqlCommand("select CardNumber from UserAccount where UserId = @senderId", con);
             cmd.Parameters.AddWithValue("@senderId", senderUserId);
-            cmd.Parameters.AddWithValue("@receiverId", recipientUserId);
             SqlDataReader reader = cmd.ExecuteReader();
             long senderCardNumber = 0;
+            //long receiverCardNumber = 0;
+            while (reader.Read())
+            {
+                senderCardNumber = long.Parse(reader.GetValue(0).ToString());
+            }
+            reader.Close();
+            con.Close();
+            //Get receipient card number
+            con.Open();
+            cmd = new SqlCommand("select CardNumber from UserAccount where UserId = @receiverId", con);
+            //cmd.Parameters.AddWithValue("@senderId", senderUserId);
+            cmd.Parameters.AddWithValue("@receiverId", recipientUserId);
+            reader = cmd.ExecuteReader();
+           // long senderCardNumber = 0;
             long receiverCardNumber = 0;
             while (reader.Read())
             {
-                string cardNumber = reader.GetValue(0).ToString();
-                if (senderCardNumber == 0)
-                {
-                    senderCardNumber = long.Parse(cardNumber);
-                }
-                else
-                {
-                    receiverCardNumber = long.Parse(cardNumber);
-                }
-
+                receiverCardNumber = long.Parse(reader.GetValue(0).ToString());
             }
             reader.Close();
             con.Close();
             con.Open();
+            //Retrieve sender personal information
             cmd = new SqlCommand("select F_Name, L_Name, Date_Of_Birth, Mobile, Address_Country from UserInfo where UserId = @id ", con);
             cmd.Parameters.AddWithValue("@id", senderUserId);
             reader = cmd.ExecuteReader();
-
-            //reader.GetDateTime(2).ToString("yyyy-MM-dd");
             UserInfo senderUserInfo = new UserInfo();
             senderUserInfo.firstName = string.Empty;
             while (reader.Read())
@@ -619,20 +622,20 @@ namespace RestAPITesting.Models
             con.Close();
             con.Open();
             //Insert record into sender database
-            cmd = new SqlCommand("insert into UserTransaction values (@userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
-            cmd.Parameters.AddWithValue("@userid", senderUserId);
+            cmd = new SqlCommand("insert into UserTransaction values (@Userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
+            cmd.Parameters.AddWithValue("@Userid", senderUserId);
             cmd.Parameters.AddWithValue("@CardNumber", senderCardNumber);
             cmd.Parameters.AddWithValue("@TransactionType", "Transfer OUT");
             DateTime currrentDateTime = DateTime.Now;
             cmd.Parameters.AddWithValue("@TransactionTime", currrentDateTime);
-            cmd.Parameters.AddWithValue("@TransactionAmount", amountTrans);
+            cmd.Parameters.AddWithValue("@TransactionAmount", (0 - double.Parse(amountTrans)).ToString());
             cmd.ExecuteNonQueryAsync();
             con.Close();
             con.Open();
 
             //Insert record into receiver database
-            cmd = new SqlCommand("insert into UserTransaction values (@userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
-            cmd.Parameters.AddWithValue("@userid", recipientUserId);
+            cmd = new SqlCommand("insert into UserTransaction values (@Userid, @CardNumber, @TransactionType, @TransactionTime, @TransactionAmount)", con);
+            cmd.Parameters.AddWithValue("@Userid", recipientUserId);
             cmd.Parameters.AddWithValue("@CardNumber", receiverCardNumber);
             cmd.Parameters.AddWithValue("@TransactionType", "Transfer IN");
             cmd.Parameters.AddWithValue("@TransactionTime", currrentDateTime);
@@ -643,6 +646,7 @@ namespace RestAPITesting.Models
             senderUserAccount.Balance = senderNewAmount;
             senderUserAccount.CardNumber = senderCardNumber;
 
+            //Setup response object
             response.StatusCode = 200;
             response.StatusMessage = "Successed!";
             response.user = senderUserInfo;
@@ -685,7 +689,7 @@ namespace RestAPITesting.Models
 
             }
             reader.Close();
-            
+
             con.Close();
 
             response.StatusMessage = string.Empty;
@@ -695,6 +699,282 @@ namespace RestAPITesting.Models
             return response;
         }
 
+        public UserTransactionResponse GetUserTransaction(SqlConnection con)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            SqlDataAdapter da = new SqlDataAdapter("Select * from UserTransaction", con);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString();
+                    transaction.transactionAmount = Convert.ToDouble(dt.Rows[i]["transactionAmount"]);
+
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public UserTransactionResponse GetTransactionById(SqlConnection con, int userId)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            SqlCommand cmd = new SqlCommand("SELECT * FROM UserTransaction WHERE userId = @userId", con);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString("yyyy-MM-dd");
+                    transaction.transactionAmount = (double)dt.Rows[i]["transactionAmount"];
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public UserTransactionResponse GetTransactionThisMonth(SqlConnection con, int userId)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            DateTime currentDate = DateTime.Now;
+            SqlDataAdapter da = new SqlDataAdapter("SELECT * FROM UserTransaction WHERE userId = '" + userId + "' AND MONTH(transactionTime) = " + currentDate.Month, con);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString("yyyy-MM-dd");
+                    transaction.transactionAmount = (double)dt.Rows[i]["transactionAmount"];
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public UserTransactionResponse GetTransactionLastMonth(SqlConnection con, int userId)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            SqlCommand cmd = new SqlCommand("SELECT * FROM UserTransaction WHERE userId = @userId AND MONTH(transactionTime) = MONTH(DATEADD(month, -1, GETDATE())) AND YEAR(transactionTime) = YEAR(DATEADD(month, -1, GETDATE()))", con);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString("yyyy-MM-dd");
+                    transaction.transactionAmount = (double)dt.Rows[i]["transactionAmount"];
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public UserTransactionResponse GetTransactionIn3Month(SqlConnection con, int userId)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            SqlCommand cmd = new SqlCommand("SELECT * FROM UserTransaction WHERE userId = @userId AND transactionTime >= DATEADD(month, -3, GETDATE()) AND transactionTime <= GETDATE()", con);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString("yyyy-MM-dd");
+                    transaction.transactionAmount = (double)dt.Rows[i]["transactionAmount"];
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public UserTransactionResponse GetTransactionThisYear(SqlConnection con, int userId)
+        {
+            UserTransactionResponse response = new UserTransactionResponse();
+            SqlCommand cmd = new SqlCommand("SELECT * FROM UserTransaction WHERE userId = @userId AND YEAR(transactionTime) = YEAR(GETDATE())", con);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            SqlDataAdapter da = new SqlDataAdapter(cmd);
+            DataTable dt = new DataTable();
+            List<UserTransaction> listTransaction = new List<UserTransaction>();
+            da.Fill(dt);
+            if (dt.Rows.Count > 0)
+            {
+                for (int i = 0; i < dt.Rows.Count; i++)
+                {
+                    UserTransaction transaction = new UserTransaction();
+                    transaction.recordId = (int)dt.Rows[i]["recordId"];
+                    transaction.userId = (int)dt.Rows[i]["userId"];
+                    transaction.cardNumber = (long)dt.Rows[i]["cardNumber"];
+                    transaction.transactionType = dt.Rows[i]["transactionType"].ToString();
+                    transaction.transactionTime = ((DateTime)dt.Rows[i]["transactionTime"]).ToString("yyyy-MM-dd");
+                    transaction.transactionAmount = (double)dt.Rows[i]["transactionAmount"];
+
+                    listTransaction.Add(transaction);
+                }
+            }
+            if (listTransaction.Count > 0)
+            {
+                response.StatusCode = 200;
+                response.StatusMessage = "User Transaction Found";
+                response.listTransaction = listTransaction;
+            }
+            else
+            {
+                response.StatusCode = 100;
+                response.StatusMessage = "No Data Found";
+                response.listTransaction = null;
+            }
+            return response;
+        }
+
+        public userInfoResponse GoBackButton(SqlConnection con, int userId)
+        {
+            con.Open();
+            userInfoResponse response = new userInfoResponse();
+            //Retrieve original user information for back to myAccount window
+            SqlCommand cmd = new SqlCommand("select F_Name, L_Name, Date_Of_Birth, Mobile, Address_Country, UserId, Email from UserInfo where UserId = @userId", con);
+            cmd.Parameters.AddWithValue("@userId", userId);
+            SqlDataReader reader = cmd.ExecuteReader();
+            UserInfo user = new UserInfo();
+            while (reader.Read())
+            {
+                user.firstName = reader.GetString(0);
+                user.lastName = reader.GetString(1);
+                user.DOB = reader.GetDateTime(2);
+                user.phoneNumber = reader.GetString(3);
+                user.addressCountry = reader.GetString(4);
+                //ID will use in next query to retrieve account information
+                user.userId = reader.GetInt32(5);
+                user.email = reader.GetString(6);
+            }
+            reader.Close();
+            con.Close();
+            con.Open();
+            //Retrieve updated user account information for myAccount window
+            cmd = new SqlCommand("select CardNumber, Balance from UserAccount where UserId = @id", con);
+            cmd.Parameters.AddWithValue("@id", user.userId.ToString());
+            reader = cmd.ExecuteReader();
+            UserAccount account = new UserAccount();
+            while (reader.Read())
+            {
+                account.CardNumber = reader.GetInt64(0);
+                account.Balance = reader.GetDouble(1);
+
+            }
+            reader.Close();
+
+            con.Close();
+
+            response.StatusMessage = string.Empty;
+            response.StatusCode = 200;
+            response.user = user;
+            response.accout = account;
+            return response;
+        }
 
 
     }
